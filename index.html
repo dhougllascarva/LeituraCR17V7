@@ -1,0 +1,627 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1.0"
+>
+
+<title>Tellus Leitura</title>
+
+<link rel="manifest" href="manifest.json">
+
+<meta name="theme-color" content="#0b1f3a">
+
+<link
+rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+
+<script
+src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+</script>
+
+<style>
+
+*{
+  box-sizing:border-box;
+}
+
+body{
+  margin:0;
+  font-family:Arial,sans-serif;
+  background:#eef2f7;
+}
+
+.topo{
+  background:#0b1f3a;
+  color:white;
+  padding:20px;
+  text-align:center;
+}
+
+.logo{
+  font-size:28px;
+  font-weight:bold;
+}
+
+.sub{
+  margin-top:5px;
+}
+
+.abas{
+  display:flex;
+}
+
+.aba{
+  flex:1;
+  border:none;
+  padding:15px;
+  font-size:16px;
+  font-weight:bold;
+}
+
+.ativa{
+  background:#1976d2;
+  color:white;
+}
+
+.container{
+  padding:15px;
+}
+
+select,input{
+  width:100%;
+  padding:14px;
+  margin-bottom:12px;
+  border:none;
+  border-radius:14px;
+  font-size:16px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.1);
+}
+
+.card{
+  background:white;
+  padding:16px;
+  border-radius:16px;
+  margin-bottom:16px;
+  box-shadow:0 2px 10px rgba(0,0,0,0.1);
+}
+
+.titulo{
+  font-weight:bold;
+  color:#0b1f3a;
+  margin-top:10px;
+}
+
+.valor{
+  margin-bottom:10px;
+}
+
+.botao{
+  display:block;
+  background:#1976d2;
+  color:white;
+  text-decoration:none;
+  text-align:center;
+  padding:14px;
+  border-radius:12px;
+  margin-top:12px;
+  font-weight:bold;
+}
+
+.oculto{
+  display:none;
+}
+
+#map{
+  width:100%;
+  height:75vh;
+  border-radius:18px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="topo">
+
+<div class="logo">
+TELLUS LEITURA
+</div>
+
+<div class="sub">
+Pesquisa Operacional
+</div>
+
+</div>
+
+<div class="abas">
+
+<button
+class="aba ativa"
+id="btnBusca"
+onclick="abrirAba('busca')"
+>
+BUSCA
+</button>
+
+<button
+class="aba"
+id="btnMapa"
+onclick="abrirAba('mapa')"
+>
+MAPA
+</button>
+
+</div>
+
+<div
+id="abaBusca"
+class="container"
+>
+
+<select id="area"></select>
+
+<input
+list="listaMRUs"
+id="mru"
+placeholder="Digite ou selecione a MRU"
+>
+
+<datalist id="listaMRUs"></datalist>
+
+<input
+type="text"
+id="busca"
+placeholder="Buscar instalação, medidor, rua ou cliente"
+>
+
+<div id="resultados"></div>
+
+</div>
+
+<div
+id="abaMapa"
+class="container oculto"
+>
+
+<select id="areaMapa"></select>
+
+<input
+list="listaMRUsMapa"
+id="mruMapa"
+placeholder="Digite ou selecione a MRU"
+>
+
+<datalist id="listaMRUsMapa"></datalist>
+
+<button
+class="botao"
+onclick="carregarMapa()"
+>
+EXIBIR MAPA
+</button>
+
+<div id="map"></div>
+
+</div>
+
+<script>
+
+const AREAS = {
+  "171":"ITABUNA",
+  "172":"IBICARAI",
+  "173":"ILHÉUS",
+  "174":"COARACI",
+  "175":"CANAVIEIRAS",
+  "176":"CAMACAN"
+};
+
+let banco = [];
+let indexes = {};
+let map = null;
+
+async function carregarIndexes(){
+
+  let response =
+    await fetch('indexes.json');
+
+  indexes = await response.json();
+
+}
+
+carregarIndexes();
+
+function popularAreas(){
+
+  let html =
+    '<option value="">Selecionar Área</option>';
+
+  for(let codigo in AREAS){
+
+    html += `
+      <option value="${codigo}">
+      ${codigo} - ${AREAS[codigo]}
+      </option>
+    `;
+
+  }
+
+  document.getElementById('area').innerHTML = html;
+  document.getElementById('areaMapa').innerHTML = html;
+
+}
+
+popularAreas();
+
+function abrirAba(tipo){
+
+  document
+    .getElementById('abaBusca')
+    .classList.add('oculto');
+
+  document
+    .getElementById('abaMapa')
+    .classList.add('oculto');
+
+  document
+    .getElementById('btnBusca')
+    .classList.remove('ativa');
+
+  document
+    .getElementById('btnMapa')
+    .classList.remove('ativa');
+
+  if(tipo == 'busca'){
+
+    document
+      .getElementById('abaBusca')
+      .classList.remove('oculto');
+
+    document
+      .getElementById('btnBusca')
+      .classList.add('ativa');
+
+  }else{
+
+    document
+      .getElementById('abaMapa')
+      .classList.remove('oculto');
+
+    document
+      .getElementById('btnMapa')
+      .classList.add('ativa');
+
+    setTimeout(() => {
+
+      if(map){
+        map.invalidateSize();
+      }
+
+    }, 300);
+
+  }
+
+}
+
+document
+.getElementById('area')
+.addEventListener('change', carregarArea);
+
+async function carregarArea(){
+
+  let area =
+    document.getElementById('area').value;
+
+  banco = [];
+
+  let arquivos =
+    indexes[area];
+
+  for(let arquivo of arquivos){
+
+    let response =
+      await fetch(arquivo);
+
+    let parte =
+      await response.json();
+
+    banco =
+      banco.concat(parte);
+
+  }
+
+  let mrus = [
+    ...new Set(
+      banco.map(i => i[0])
+    )
+  ];
+
+  mrus.sort();
+
+  let lista =
+    document.getElementById('listaMRUs');
+
+  lista.innerHTML = '';
+
+  mrus.forEach(mru => {
+
+    lista.innerHTML +=
+      `<option value="${mru}">`;
+
+  });
+
+}
+
+document
+.getElementById('mru')
+.addEventListener('input', pesquisar);
+
+document
+.getElementById('busca')
+.addEventListener('input', pesquisar);
+
+function pesquisar(){
+
+  let mru =
+    document.getElementById('mru')
+    .value
+    .toLowerCase();
+
+  let texto =
+    document.getElementById('busca')
+    .value
+    .toLowerCase();
+
+  let resultados = banco.filter(item => {
+
+    let okMru =
+      !mru ||
+      item[0].toLowerCase().includes(mru);
+
+    let pesquisa =
+      (
+        item[1] + ' ' +
+        item[2] + ' ' +
+        item[3] + ' ' +
+        item[7]
+      ).toLowerCase();
+
+    let okTexto =
+      pesquisa.includes(texto);
+
+    return okMru && okTexto;
+
+  }).slice(0,50);
+
+  let html = '';
+
+  resultados.forEach(item => {
+
+    html += `
+
+<div class="card">
+
+<div class="titulo">
+⚡ Instalação
+</div>
+
+<div class="valor">
+${item[1]}
+</div>
+
+<div class="titulo">
+🔢 Medidor
+</div>
+
+<div class="valor">
+${item[2]}
+</div>
+
+<div class="titulo">
+📍 Rua
+</div>
+
+<div class="valor">
+${item[3]}
+</div>
+
+<div class="titulo">
+🏠 Número
+</div>
+
+<div class="valor">
+${item[4]}
+</div>
+
+<div class="titulo">
+🗺 Bairro
+</div>
+
+<div class="valor">
+${item[5]}
+</div>
+
+<div class="titulo">
+🏙 Cidade
+</div>
+
+<div class="valor">
+${item[6]}
+</div>
+
+<div class="titulo">
+👤 Cliente
+</div>
+
+<div class="valor">
+${item[7]}
+</div>
+
+<a
+class="botao"
+href="${item[10]}"
+target="_blank"
+>
+
+🗺 Abrir Maps
+
+</a>
+
+</div>
+
+`;
+
+  });
+
+  document.getElementById('resultados')
+    .innerHTML = html;
+
+}
+
+document
+.getElementById('areaMapa')
+.addEventListener('change', carregarAreaMapa);
+
+async function carregarAreaMapa(){
+
+  let area =
+    document.getElementById('areaMapa').value;
+
+  banco = [];
+
+  let arquivos =
+    indexes[area];
+
+  for(let arquivo of arquivos){
+
+    let response =
+      await fetch(arquivo);
+
+    let parte =
+      await response.json();
+
+    banco =
+      banco.concat(parte);
+
+  }
+
+  let mrus = [
+    ...new Set(
+      banco.map(i => i[0])
+    )
+  ];
+
+  mrus.sort();
+
+  let lista =
+    document.getElementById('listaMRUsMapa');
+
+  lista.innerHTML = '';
+
+  mrus.forEach(mru => {
+
+    lista.innerHTML +=
+      `<option value="${mru}">`;
+
+  });
+
+}
+
+function carregarMapa(){
+
+  let mru =
+    document.getElementById('mruMapa').value;
+
+  let dados =
+    banco.filter(i => i[0] == mru);
+
+  if(dados.length == 0){
+    alert('Nenhuma instalação encontrada');
+    return;
+  }
+
+  if(map){
+    map.remove();
+  }
+
+  map = L.map('map')
+    .setView(
+      [
+        parseFloat(dados[0][8]),
+        parseFloat(dados[0][9])
+      ],
+      15
+    );
+
+  L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {
+      attribution:'© OpenStreetMap'
+    }
+  ).addTo(map);
+
+  dados.forEach(item => {
+
+    if(
+      item[8] == 'nan' ||
+      item[9] == 'nan'
+    ) return;
+
+    let marker = L.marker([
+      parseFloat(item[8]),
+      parseFloat(item[9])
+    ]).addTo(map);
+
+    marker.bindPopup(`
+
+<b>⚡ Instalação:</b><br>
+${item[1]}
+<br><br>
+
+<b>👤 Cliente:</b><br>
+${item[7]}
+<br><br>
+
+<b>📍 Rua:</b><br>
+${item[3]}, ${item[4]}
+<br><br>
+
+<a
+href="${item[10]}"
+target="_blank"
+>
+
+🗺 Navegar
+
+</a>
+
+`);
+
+  });
+
+}
+
+if ('serviceWorker' in navigator) {
+
+  window.addEventListener('load', () => {
+
+    navigator.serviceWorker
+      .register('./sw.js?v=9999');
+
+  });
+
+}
+
+</script>
+
+</body>
+</html>

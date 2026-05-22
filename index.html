@@ -226,7 +226,7 @@ placeholder="Digite ou selecione a MRU"
 <input
 type="text"
 id="busca"
-placeholder="Buscar instalação, medidor, rua ou cliente"
+placeholder="Buscar instalação, medidor ou cliente"
 >
 
 <div id="resultados"></div>
@@ -416,24 +416,15 @@ async user => {
   let dados =
     snap.data();
 
-  console.log('DADOS FIREBASE:', dados);
+  if(!dados.ativo){
 
-console.log('TIPO ATIVO:', typeof dados.ativo);
+    alert('Usuário desativado');
 
-console.log('VALOR ATIVO:', dados.ativo);
+    logout();
 
-if(!dados.ativo){
+    return;
 
-  alert(
-    'Usuário desativado -> ' +
-    JSON.stringify(dados)
-  );
-
-  logout();
-
-  return;
-
-}
+  }
 
   permissoes =
     dados.areas;
@@ -470,11 +461,9 @@ function popularAreas(){
   permissoes.forEach(area => {
 
     html += `
-
 <option value="${area}">
 ${area} - ${AREAS[area]}
 </option>
-
 `;
 
   });
@@ -485,36 +474,36 @@ ${area} - ${AREAS[area]}
   document.getElementById('areaMapa')
     .innerHTML = html;
 
+  // AUTOSELEÇÃO
 
-  // =====================================
-  // AUTOSELECIONAR ÁREA ÚNICA
-  // =====================================
-
-  if(permissoes.length == 1){
+  if(permissoes.length === 1){
 
     let unicaArea = permissoes[0];
 
-    // Selecionar automaticamente
     document.getElementById('area')
       .value = unicaArea;
 
     document.getElementById('areaMapa')
       .value = unicaArea;
 
-    // Ocultar selects
     document.getElementById('area')
       .style.display = 'none';
 
     document.getElementById('areaMapa')
       .style.display = 'none';
 
-    // Carregar automaticamente
     carregarArea();
     carregarAreaMapa();
 
-  }
+  }else{
 
-}
+    document.getElementById('area')
+      .style.display = 'block';
+
+    document.getElementById('areaMapa')
+      .style.display = 'block';
+
+  }
 
 }
 
@@ -629,13 +618,18 @@ function pesquisar(){
     document
     .getElementById('mru')
     .value
-    .toLowerCase();
+    .toLowerCase()
+    .trim();
 
   let texto =
     document
     .getElementById('busca')
     .value
-    .toLowerCase();
+    .toLowerCase()
+    .trim();
+
+  texto =
+    texto.replace(/\s+/g,' ');
 
   let resultados =
     banco.filter(item => {
@@ -644,16 +638,20 @@ function pesquisar(){
         !mru ||
         item[0]
         .toLowerCase()
+        .trim()
         .includes(mru);
 
       let pesquisa = (
 
-        item[1] + ' ' +
-        item[2] + ' ' +
-        item[3] + ' ' +
-        item[7]
+        String(item[1]) + ' ' +
+        String(item[2]) + ' ' +
+        String(item[7])
 
-      ).toLowerCase();
+      )
+
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g,' ');
 
       let okTexto =
         pesquisa.includes(texto);
@@ -863,7 +861,7 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
 
     navigator.serviceWorker
-      .register('./sw.js?v=12000');
+      .register('./sw.js?v=12004');
 
   });
 
